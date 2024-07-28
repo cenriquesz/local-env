@@ -42,30 +42,25 @@ keytool -import -trustcacerts -file $ca_cert_path -alias my-ca-cert -keystore $c
 
 ### Configure SSL for ActiveMQ in Java Projects
 
-First, define the paths for the ActiveMQ truststore and the CA certificate:
-
-```sh
-activemq_ts_path="/path-to-ssl-directory-for-activemq/activemq-truststore.ts"
-ca_cert_path="./services/minica/app/certs/ca_cert.pem"
+Copy keystore to the project's resources ssl directory
+```bash
+ks_path="./local/env/services/minica/app/certs/stores/local-env.com.ks"
+ssl_ks_path="./src/main/resources/ssl/activemq-local-env.ks"
+cp $ks_path $ssl_ks_path
 ```
 
-Then, import the CA certificate into the ActiveMQ truststore:
-
-```sh
-keytool -keystore $activemq_ts_path -alias activemq -import -file $ca_cert_path
+Copy truststore to the project's resources ssl directory
+```bash
+ts_path="./local/env/services/minica/app/certs/stores/ca-cert.ts"
+ssl_ts_path="./src/main/resources/ssl/activemq-local-env.ts"
+cp $ts_path $ssl_ts_path
 ```
 
 ### Configure SSL for Kafka in Java Projects
 
-First, define the paths for the Kafka truststore and the CA certificate:
-
-```sh
-kafka_ts_path="/path-to-ssl-directory-for-kafka/kafka-truststore.ts"
-ca_cert_path="./services/minica/app/certs/ca_cert.pem"
-```
-
-Then, import the CA certificate into the Kafka truststore:
-
-```sh
-keytool -keystore $kafka_ts_path -alias kafka -import -file $ca_cert_path
+Copy truststore to the project's resources ssl directory
+```bash
+ts_path="./local/env/services/minica/app/certs/stores/ca-cert.ts"
+ssl_ts_path="./src/main/resources/ssl/kafka-local-env.ts"
+cp $ts_path $ssl_ts_path
 ```
