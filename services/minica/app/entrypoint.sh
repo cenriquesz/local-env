@@ -70,4 +70,6 @@ if [[ ! -f "$stores_dir/ca-cert.ts" ]]; then
   keytool -import -trustcacerts -alias ca-cert -file $CA_CERT_PATH -keystore "$stores_dir/ca-cert.ts" -storepass password -noprompt
 fi
 
+chown -R 1000:1000 $CERTS_DIR
+
 tail -f /dev/null
