@@ -394,7 +394,7 @@ spring:
       ssl.truststore.password: password
 ```
 
-El truststore `ca-cert.ts` se genera automáticamente por minica y está disponible en `local-env/services/minica/app/certs/stores/ca-cert.ts`. Cópialo a `src/main/resources/ssl/kafka-local-env.ts` en tu proyecto.
+El truststore `ca-cert.ts` se genera automáticamente por minica y está disponible en `local-env/services/minica/app/certs/stores/ca-cert.ts`. Cópialo a `src/main/resources/ssl/kafka-local-env.ts` en tu proyecto. Si tu proyecto no tiene acceso al filesystem de `local-env` (otra máquina, Docker remoto), descárgalo desde `https://dashboard.local-env.com/api/certs/stores/ca-cert.ts`.
 
 #### ActiveMQ
 
@@ -415,7 +415,7 @@ spring:
       trust-store-password: password
 ```
 
-Los stores de ActiveMQ también los genera minica. Encuéntralos en `local-env/services/minica/app/certs/stores/`.
+Los stores de ActiveMQ también los genera minica. Encuéntralos en `local-env/services/minica/app/certs/stores/` (usa `local-env.com.ks`/`local-env.com.ts` si no se ha generado un store específico para el dominio de ActiveMQ), o descárgalos desde el dashboard: `GET https://dashboard.local-env.com/api/certs/stores`.
 
 #### AWS / LocalStack
 
@@ -547,6 +547,22 @@ location / {
 ```
 
 El dashboard extrae el nombre del contenedor (`mi-contenedor`) del valor de `$upstream` y consulta su estado a Docker. Con `proxy_pass http://mi-contenedor:8080;` directo (sin variable) también funciona nginx, pero el dashboard no puede extraer el nombre del contenedor y mostrará estado "unknown".
+
+### Documentación OpenAPI/Swagger automática
+
+Cada servicio detectado en la vista "Apps" tiene un botón **API**. Al pulsarlo, el dashboard prueba automáticamente, a través de nginx, las rutas donde suelen vivir los specs OpenAPI/Swagger:
+
+| Ruta | Frameworks típicos |
+|---|---|
+| `/openapi.json` | FastAPI, Express con swagger-jsdoc, NestJS |
+| `/v3/api-docs` | Spring Boot con Springdoc |
+| `/swagger.json` | Varios |
+| `/swagger/v1/swagger.json` | ASP.NET con Swashbuckle |
+| `/api-docs` | Varios |
+
+Si tu app expone su spec en alguna de esas rutas, no tienes que hacer nada más: aparecerá renderizado con Swagger UI dentro del propio dashboard. Si no responde ninguna, el dashboard simplemente muestra un aviso — no afecta al resto de la detección de la app (estado, URL, etc).
+
+Si tu spec vive en una ruta distinta a las anteriores, de momento no hay forma de configurarla desde el dashboard; la alternativa es enlazarla directamente desde tu propia consola/README, o exponerla también en `/openapi.json` (redirect o alias) para que el dashboard la encuentre.
 
 ---
 

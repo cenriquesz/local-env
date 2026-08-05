@@ -3,11 +3,11 @@
     <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gh-border flex-shrink-0">
       <div>
-        <h1 class="text-gh-text text-lg font-semibold">Apps</h1>
-        <p class="text-gh-muted text-xs mt-0.5">Aplicaciones externas detectadas en nginx</p>
+        <h1 class="text-gh-text text-lg font-semibold">API</h1>
+        <p class="text-gh-muted text-xs mt-0.5">API REST del dashboard de local-env (OpenAPI)</p>
       </div>
       <button
-        @click="fetchApps"
+        @click="fetchSpec"
         class="flex items-center gap-2 px-3 py-1.5 text-xs border border-gh-border text-gh-muted hover:text-gh-text hover:border-gh-text rounded transition-colors"
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -18,7 +18,7 @@
     </div>
 
     <!-- Contenido -->
-    <div class="flex-1 overflow-y-auto p-6">
+    <div class="flex-1 overflow-y-auto">
       <!-- Spinner -->
       <div v-if="loading" class="flex items-center justify-center h-48">
         <svg class="animate-spin w-8 h-8 text-gh-orange" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -33,57 +33,36 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
         <p class="text-gh-red text-sm">{{ error }}</p>
-        <button @click="fetchApps" class="text-xs text-gh-blue hover:underline">Reintentar</button>
+        <button @click="fetchSpec" class="text-xs text-gh-blue hover:underline">Reintentar</button>
       </div>
 
-      <!-- Estado vacio -->
-      <div v-else-if="!apps.length" class="flex flex-col items-center justify-center h-48 gap-3 text-center">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-gh-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-        </svg>
-        <p class="text-gh-text text-sm font-medium">No se detectaron apps externas</p>
-        <p class="text-gh-muted text-xs max-w-xs">
-          Añade un fichero .conf en
-          <code class="font-mono text-gh-blue">services/nginx/etc/nginx/conf.d/http/</code>
-          desde tu app.
-        </p>
-      </div>
-
-      <!-- Grid de apps -->
-      <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        <AppCard
-          v-for="app in apps"
-          :key="app.name"
-          :app="app"
-          @open-api="$emit('open-api', $event)"
-        />
-      </div>
+      <!-- Swagger -->
+      <SwaggerViewer v-else-if="spec" :spec="spec" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import AppCard from '../components/AppCard.vue'
-import { getApps } from '../api.js'
+import { ref, onMounted, defineAsyncComponent } from 'vue'
+import { getDashboardOpenapi } from '../api.js'
 
-defineEmits(['open-api'])
+const SwaggerViewer = defineAsyncComponent(() => import('../components/SwaggerViewer.vue'))
 
-const apps    = ref([])
+const spec    = ref(null)
 const loading = ref(false)
 const error   = ref(null)
 
-async function fetchApps() {
+async function fetchSpec() {
   loading.value = true
   error.value   = null
   try {
-    apps.value = await getApps()
+    spec.value = await getDashboardOpenapi()
   } catch (e) {
-    error.value = e.message || 'Error al obtener apps'
+    error.value = e.message || 'Error al obtener el spec OpenAPI'
   } finally {
     loading.value = false
   }
 }
 
-onMounted(fetchApps)
+onMounted(fetchSpec)
 </script>

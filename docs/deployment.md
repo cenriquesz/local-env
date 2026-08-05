@@ -286,6 +286,17 @@ Tras el primer arranque, minica genera en `services/minica/app/certs/stores/` lo
 
 La contraseña de todos los stores es `password`.
 
+### Descarga desde el dashboard
+
+Si no tienes acceso directo al filesystem del host (Docker remoto, otra máquina), los mismos ficheros se pueden descargar desde `https://dashboard.local-env.com` → pestaña **Certificados**, o directamente vía API:
+
+```bash
+curl -o ca-cert.ts https://dashboard.local-env.com/api/certs/stores/ca-cert.ts
+curl -o local-env.com.ks https://dashboard.local-env.com/api/certs/stores/local-env.com.ks
+```
+
+`GET /api/certs/stores` lista todos los almacenes disponibles (`.ks`, `.ts`, `.p12`); `GET /api/certs/stores/{fichero}` descarga uno concreto. El listado se genera dinámicamente a partir de `services/minica/app/certs/stores/`, así que incluye automáticamente los stores de cualquier servicio opcional que se active (Kafka, ActiveMQ, Postgres...).
+
 ### Proyecto Java con Kafka
 
 ```bash

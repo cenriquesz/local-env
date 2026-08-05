@@ -42,6 +42,36 @@
 
     <!-- Contenido -->
     <div class="flex-1 overflow-y-auto p-6">
+      <!-- Almacenes de confianza -->
+      <div v-if="stores.length" class="mb-6">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-gh-text text-sm font-semibold">Almacenes (keystores / truststores)</h2>
+          <span class="text-gh-muted text-xs">Contraseña: <code class="font-mono">password</code></span>
+        </div>
+        <div class="border border-gh-border rounded-lg divide-y divide-gh-border">
+          <div
+            v-for="store in stores"
+            :key="store.filename"
+            class="flex items-center justify-between px-4 py-2"
+          >
+            <div class="flex items-center gap-2">
+              <span class="text-gh-text text-xs font-mono">{{ store.filename }}</span>
+              <span class="text-gh-muted text-[10px] uppercase border border-gh-border rounded px-1.5 py-0.5">{{ store.type }}</span>
+            </div>
+            <a
+              :href="downloadCertStoreUrl(store.filename)"
+              download
+              class="flex items-center gap-1.5 text-xs text-gh-blue hover:underline"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Descargar
+            </a>
+          </div>
+        </div>
+      </div>
+
       <!-- Spinner -->
       <div v-if="loading" class="flex items-center justify-center h-48">
         <svg class="animate-spin w-8 h-8 text-gh-orange" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -83,9 +113,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import CertCard from '../components/CertCard.vue'
-import { getCerts, restartMinica } from '../api.js'
+import { getCerts, getCertStores, downloadCertStoreUrl, restartMinica } from '../api.js'
 
 const certs       = ref([])
+const stores      = ref([])
 const loading     = ref(false)
 const error       = ref(null)
 const regenerating = ref(false)
@@ -96,6 +127,7 @@ async function fetchCerts() {
   error.value   = null
   try {
     certs.value = await getCerts()
+    stores.value = await getCertStores()
   } catch (e) {
     error.value = e.message || 'Error al obtener certificados'
   } finally {

@@ -29,6 +29,16 @@
             :title="svc.url"
           >{{ svc.url }}</a>
         </div>
+        <button
+          @click="$emit('open-api', svc.domain)"
+          class="flex-shrink-0 flex items-center gap-1 px-2 py-1 text-xs text-gh-muted hover:text-gh-text border border-gh-border hover:border-gh-text rounded transition-colors"
+          title="Buscar y ver el spec OpenAPI/Swagger de esta app"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 8l-4 4 4 4" />
+          </svg>
+          API
+        </button>
         <StatusBadge :status="svc.status" />
       </div>
 
@@ -49,6 +59,8 @@ const props = defineProps({
     required: true
   }
 })
+
+defineEmits(['open-api'])
 
 const isSinIdentificar = computed(() => props.app.name === 'Sin identificar')
 </script>

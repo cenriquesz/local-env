@@ -24,10 +24,35 @@ export async function getApps() {
   return res.json()
 }
 
+export async function getDashboardOpenapi() {
+  const res = await fetch(`${BASE}/openapi.json`)
+  if (!res.ok) throw new Error(`Error ${res.status}`)
+  return res.json()
+}
+
+export async function getAppOpenapi(domain) {
+  const res = await fetch(`${BASE}/api/apps/${encodeURIComponent(domain)}/openapi`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.detail || `Error ${res.status}`)
+  }
+  return res.json()
+}
+
 export async function getCerts() {
   const res = await fetch(`${BASE}/api/certs`)
   if (!res.ok) throw new Error(`Error ${res.status}`)
   return res.json()
+}
+
+export async function getCertStores() {
+  const res = await fetch(`${BASE}/api/certs/stores`)
+  if (!res.ok) throw new Error(`Error ${res.status}`)
+  return res.json()
+}
+
+export function downloadCertStoreUrl(filename) {
+  return `${BASE}/api/certs/stores/${encodeURIComponent(filename)}`
 }
 
 export async function reloadNginx() {

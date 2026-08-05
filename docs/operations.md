@@ -34,6 +34,10 @@ services/minica/app/certs/
 - Los stores de Java se regeneran cada vez que minica arranca.
 - La CA persiste entre reinicios porque el volumen de minica monta `/app` desde el host. Cambiar la CA implica reinstalarla en el SO y en la JVM de todos los proyectos que la usen.
 
+### Descargar los stores sin acceso al filesystem
+
+Desde `https://dashboard.local-env.com` (pestaña **Certificados**) o via API (`GET /api/certs/stores` para listar, `GET /api/certs/stores/{fichero}` para descargar uno). Ver [`docs/deployment.md`](deployment.md#descarga-desde-el-dashboard) y el spec de la API en [`docs/api/openapi.json`](api/openapi.json) o en `https://dashboard.local-env.com/docs`.
+
 ### Renovar certificados de dominio sin cambiar la CA
 
 Útil cuando los certificados están a punto de caducar o se han corrompido, pero no se quiere perder la confianza en la CA ya instalada.

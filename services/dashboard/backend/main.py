@@ -2,6 +2,9 @@ import os
 import json as json_lib
 import shutil
 import asyncio
+import socket
+import ssl
+import http.client
 import subprocess
 from pathlib import Path
 from typing import Generator
@@ -15,7 +18,22 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sse_starlette.sse import EventSourceResponse
 
-app = FastAPI(title="local-env dashboard")
+TAGS_METADATA = [
+    {"name": "servicios", "description": "Arranque, parada y estado de los servicios opcionales (OpenSearch, LocalStack, ActiveMQ, Kafka, Postgres)."},
+    {"name": "apps", "description": "Apps externas detectadas via los .conf de nginx fuera del core, incluyendo deteccion de su spec OpenAPI/Swagger si lo exponen."},
+    {"name": "certificados", "description": "Certificados TLS y almacenes (keystores/truststores) generados por minica."},
+    {"name": "nginx", "description": "Recarga de configuracion de nginx."},
+    {"name": "minica", "description": "Gestion de la CA local y regeneracion de certificados."},
+    {"name": "logs", "description": "Streaming de logs de contenedores."},
+    {"name": "aws", "description": "Estado de LocalStack (emulacion de AWS)."},
+]
+
+app = FastAPI(
+    title="local-env dashboard",
+    description="API del dashboard de local-env: estado de servicios, apps externas, certificados TLS y control basico del entorno.",
+    version="1.2.0",
+    openapi_tags=TAGS_METADATA,
+)
 
 # Rutas montadas en el contenedor
 NGINX_CONF_HTTP     = Path("/etc/nginx/conf.d/http")
@@ -24,7 +42,26 @@ NGINX_CONF_HTTP_AVL = Path("/etc/nginx/conf.d/http.available")
 NGINX_CONF_STR_SVC  = Path("/etc/nginx/conf.d/stream/services")
 NGINX_CONF_STR_AVL  = Path("/etc/nginx/conf.d/stream.available")
 CERTS_DIR           = Path("/certs/live")
+STORES_DIR          = Path("/certs/stores")
+STORE_EXTENSIONS    = {".ks", ".ts", ".p12"}
+CA_CERT_PATH        = Path("/certs/ca_cert.pem")
 WORKSPACE           = Path("/workspace")
+
+# IP fija de nginx en local-env-net (ver compose.yaml). Se usa para hablar con
+# las apps a traves de nginx sin depender de que *.local-env.com resuelva
+# correctamente desde dentro de un contenedor (la vista DNS "internal" de BIND
+# solo se activa de forma fiable para clientes que consultan a bind directamente).
+NGINX_IP = "10.0.1.2"
+
+OPENAPI_CANDIDATE_PATHS = [
+    "/openapi.json",
+    "/v3/api-docs",
+    "/swagger.json",
+    "/swagger/v1/swagger.json",
+    "/api-docs",
+]
+
+CORE_DOMAINS = {"local-env.com", "local-aws.com", "dashboard.local-env.com"}
 
 docker_client = docker.from_env()
 
@@ -81,6 +118,35 @@ SERVICES = {
         "stream_configs": [],
     },
 }
+
+
+class _SNIHTTPSConnection(http.client.HTTPSConnection):
+    """HTTPSConnection que conecta por IP pero usa `sni_host` para el SNI/TLS,
+    evitando depender de la resolucion DNS de *.local-env.com dentro del contenedor."""
+
+    def __init__(self, ip: str, sni_host: str, context: ssl.SSLContext, timeout: float):
+        super().__init__(ip, 443, timeout=timeout, context=context)
+        self._sni_host = sni_host
+
+    def connect(self):
+        sock = socket.create_connection((self.host, self.port), self.timeout)
+        self.sock = self._context.wrap_socket(sock, server_hostname=self._sni_host)
+
+
+def _fetch_json_via_nginx(domain: str, path: str, timeout: float = 2.0) -> dict | None:
+    """GET a `https://<domain><path>` pasando por nginx (10.0.1.2), devuelve el JSON o None."""
+    ctx = ssl.create_default_context(cafile=str(CA_CERT_PATH)) if CA_CERT_PATH.exists() else ssl._create_unverified_context()
+    conn = _SNIHTTPSConnection(NGINX_IP, domain, ctx, timeout=timeout)
+    try:
+        conn.request("GET", path, headers={"Host": domain})
+        resp = conn.getresponse()
+        if resp.status != 200:
+            return None
+        return json_lib.loads(resp.read())
+    except Exception:
+        return None
+    finally:
+        conn.close()
 
 
 def get_container_info(name: str) -> dict:
@@ -144,8 +210,9 @@ def remove_nginx_for_service(service_key: str):
         dst.unlink(missing_ok=True)
 
 
-@app.get("/api/services")
+@app.get("/api/services", tags=["servicios"], summary="Listar servicios opcionales y su estado")
 def get_services():
+    """Devuelve cada servicio opcional (OpenSearch, LocalStack, ActiveMQ, Kafka, Postgres) con el estado de sus contenedores y sus URLs."""
     expected_images = get_compose_images()
     result = []
     for key, cfg in SERVICES.items():
@@ -184,8 +251,9 @@ def get_services():
     return result
 
 
-@app.post("/api/services/{service_id}/start")
+@app.post("/api/services/{service_id}/start", tags=["servicios"], summary="Arrancar un servicio opcional")
 def start_service(service_id: str):
+    """Sincroniza la config de nginx del servicio, levanta sus contenedores con docker compose y recarga nginx."""
     if service_id not in SERVICES:
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
     cfg = SERVICES[service_id]
@@ -203,8 +271,9 @@ def start_service(service_id: str):
     return {"ok": True}
 
 
-@app.post("/api/services/{service_id}/stop")
+@app.post("/api/services/{service_id}/stop", tags=["servicios"], summary="Parar un servicio opcional")
 def stop_service(service_id: str):
+    """Detiene los contenedores del servicio y retira su config de nginx."""
     if service_id not in SERVICES:
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
     cfg = SERVICES[service_id]
@@ -219,15 +288,14 @@ def stop_service(service_id: str):
     return {"ok": True}
 
 
-@app.get("/api/apps")
+@app.get("/api/apps", tags=["apps"], summary="Listar apps externas")
 def get_apps():
-    """Detecta apps externas escaneando configs nginx no core."""
-    core_configs = {"local-env.com", "local-aws.com", "dashboard.local-env.com"}
+    """Detecta apps externas escaneando los .conf de nginx que no son del core de local-env."""
     apps_by_meta: dict[str, list] = {}
 
     for conf_file in NGINX_CONF_HTTP.glob("*.conf"):
         domain = conf_file.stem
-        if domain in core_configs:
+        if domain in CORE_DOMAINS:
             continue
         # Buscar local-env.json junto al conf para metadatos de la app
         meta_file = conf_file.parent / f"{conf_file.stem}.json"
@@ -264,8 +332,22 @@ def get_apps():
     return [{"name": name, "services": services} for name, services in apps_by_meta.items()]
 
 
-@app.get("/api/certs")
+@app.get("/api/apps/{domain}/openapi", tags=["apps"], summary="Detectar y proxear el spec OpenAPI de una app")
+def get_app_openapi(domain: str):
+    """Prueba rutas habituales de OpenAPI/Swagger (`/openapi.json`, `/v3/api-docs`, `/swagger.json`...)
+    contra el dominio, a traves de nginx, y devuelve el primer spec valido encontrado."""
+    if domain in CORE_DOMAINS or not (NGINX_CONF_HTTP / f"{domain}.conf").exists():
+        raise HTTPException(status_code=404, detail="App no encontrada")
+    for path in OPENAPI_CANDIDATE_PATHS:
+        data = _fetch_json_via_nginx(domain, path)
+        if isinstance(data, dict) and ("openapi" in data or "swagger" in data):
+            return data
+    raise HTTPException(status_code=404, detail="No se encontro un spec OpenAPI/Swagger en las rutas habituales")
+
+
+@app.get("/api/certs", tags=["certificados"], summary="Listar certificados TLS por dominio")
 def get_certs():
+    """Certificados wildcard generados por minica en `live/`, con fecha de expiracion y el keystore asociado si existe."""
     certs = []
     if CERTS_DIR.exists():
         for domain_dir in sorted(CERTS_DIR.iterdir()):
@@ -284,23 +366,60 @@ def get_certs():
                             expires = line.split("=", 1)[1].strip()
                     except Exception:
                         pass
+                keystore = f"{domain_dir.name}.ks"
                 certs.append({
                     "domain": domain_dir.name,
                     "wildcard": True,
                     "expires": expires,
                     "cert_path": str(cert_file),
+                    "keystore": keystore if (STORES_DIR / keystore).exists() else None,
                 })
     return certs
 
 
-@app.post("/api/nginx/reload")
+def _safe_store_path(filename: str) -> Path:
+    """Resuelve un nombre de fichero dentro de STORES_DIR evitando path traversal."""
+    candidate = STORES_DIR / Path(filename).name
+    try:
+        candidate.resolve().relative_to(STORES_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Nombre de fichero inválido")
+    if not candidate.is_file() or candidate.suffix not in STORE_EXTENSIONS:
+        raise HTTPException(status_code=404, detail="Almacén no encontrado")
+    return candidate
+
+
+@app.get("/api/certs/stores", tags=["certificados"], summary="Listar keystores y truststores disponibles")
+def get_cert_stores():
+    """Lista los keystores/truststores (.ks/.ts/.p12) generados por minica, listos para descargar."""
+    stores = []
+    if STORES_DIR.exists():
+        for f in sorted(STORES_DIR.iterdir()):
+            if f.is_file() and f.suffix in STORE_EXTENSIONS:
+                stores.append({
+                    "filename": f.name,
+                    "type": f.suffix.lstrip("."),
+                    "size": f.stat().st_size,
+                })
+    return stores
+
+
+@app.get("/api/certs/stores/{filename}", tags=["certificados"], summary="Descargar un keystore o truststore")
+def download_cert_store(filename: str):
+    """Descarga un fichero concreto de `certs/stores/` (p.ej. `ca-cert.ts` o `local-env.com.ks`), contraseña `password`."""
+    path = _safe_store_path(filename)
+    return FileResponse(str(path), media_type="application/octet-stream", filename=path.name)
+
+
+@app.post("/api/nginx/reload", tags=["nginx"], summary="Recargar la configuracion de nginx")
 def reload_nginx():
     nginx_reload()
     return {"ok": True}
 
 
-@app.post("/api/minica/restart")
+@app.post("/api/minica/restart", tags=["minica"], summary="Reiniciar minica y regenerar certificados")
 def restart_minica():
+    """Reinicia el contenedor de minica (regenera los certificados que falten) y recarga nginx."""
     try:
         subprocess.run(
             ["docker", "compose", "restart", "minica"],
@@ -314,8 +433,9 @@ def restart_minica():
     return {"ok": True}
 
 
-@app.get("/api/logs/{container_name}")
+@app.get("/api/logs/{container_name}", tags=["logs"], summary="Stream de logs de un contenedor (SSE)")
 async def stream_logs(container_name: str):
+    """Server-Sent Events con las ultimas 100 lineas de log del contenedor y las siguientes en tiempo real."""
     async def event_generator() -> Generator:
         try:
             c = docker_client.containers.get(container_name)
@@ -331,8 +451,9 @@ async def stream_logs(container_name: str):
     return EventSourceResponse(event_generator())
 
 
-@app.get("/api/localstack/health")
+@app.get("/api/localstack/health", tags=["aws"], summary="Salud de LocalStack")
 def get_localstack_health():
+    """Proxy al endpoint de salud de LocalStack (`/_localstack/health`)."""
     try:
         with urlopen("http://localstack:4566/_localstack/health", timeout=5) as r:
             return json_lib.loads(r.read())
@@ -345,6 +466,6 @@ static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
     app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
 
-    @app.get("/{full_path:path}")
+    @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
         return FileResponse(str(static_dir / "index.html"))
