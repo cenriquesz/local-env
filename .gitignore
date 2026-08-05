@@ -1,0 +1,16 @@
+### Enviroment file ###
+.env
+
+### IntelliJ IDEA ###
+.idea
+
+### VS Code ###
+.vscode
+
+### MacOs ###
+.DS_Store
+**/.DS_Store
+
+### Python ###
+__pycache__/
+**/__pycache__/

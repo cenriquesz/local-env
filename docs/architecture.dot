@@ -1,0 +1,104 @@
+digraph local_env {
+    rankdir=LR
+    graph [fontname="Helvetica,Arial,sans-serif", bgcolor="white", pad="0.6",
+           splines=ortho, nodesep="0.6", ranksep="1.4",
+           label="local-env - Arquitectura de red y servicios",
+           labelloc="t", fontsize="14"]
+    node  [fontname="Helvetica,Arial,sans-serif", fontsize="10",
+           style="filled,rounded", shape=box, margin="0.15,0.10"]
+    edge  [fontname="Helvetica,Arial,sans-serif", fontsize="8", color="#555555",
+           arrowsize="0.75"]
+
+    // ---- HOST ----
+    subgraph cluster_host {
+        label="Host (sistema operativo)"
+        style="rounded,dashed"
+        color="#888888"
+        bgcolor="#F5F5F5"
+
+        app [label="App / cliente\n(HTTP, Kafka, JMS)", fillcolor="#EEEEEE", fontcolor="#333333"]
+        so_dns [label="DNS del SO\n127.0.0.1:53", fillcolor="#EEEEEE", fontcolor="#333333", shape=ellipse]
+    }
+
+    // ---- RED DOCKER ----
+    subgraph cluster_docker {
+        label="local-env-net  (10.0.1.0/24)"
+        style="rounded"
+        color="#2E73B8"
+        bgcolor="#EBF3FB"
+
+        // Infraestructura
+        bind [label="bind\nDNS autoritativo\n10.0.1.3 : 53", fillcolor="#4A4A4A", fontcolor="white"]
+        minica [label="minica\nCA local\ncert.pem / key.pem\n.p12 / .ks / .ts", fillcolor="#4A4A4A", fontcolor="white"]
+        nginx [label="nginx\nProxy HTTP/HTTPS + TCP\n10.0.1.2\n:80 :443 :9092 :61617", fillcolor="#009639", fontcolor="white"]
+
+        // Busqueda
+        subgraph cluster_search {
+            label="Busqueda"
+            style="rounded,dashed"
+            color="#005EB8"
+            bgcolor="#EBF3FB"
+
+            opensearch [label="opensearch\nOpenSearch 3.7.0\n:9200", fillcolor="#005EB8", fontcolor="white"]
+            opensearch_dashboards [label="opensearch-dashboards\nOpenSearch Dashboards\n:5601", fillcolor="#C6DAFA", fontcolor="#333333"]
+        }
+
+        // AWS local
+        subgraph cluster_aws {
+            label="AWS local"
+            style="rounded,dashed"
+            color="#FF9900"
+            bgcolor="#FFF3E0"
+
+            localstack [label="localstack\nLocalStack\n*.local-aws.com\n:4566", fillcolor="#FF9900", fontcolor="white"]
+        }
+
+        // Mensajeria
+        subgraph cluster_msg {
+            label="Mensajeria"
+            style="rounded,dashed"
+            color="#231F20"
+            bgcolor="#F0EEEE"
+
+            activemq [label="activemq\nActiveMQ Classic\n:61616 (broker)\n:8161 (consola)", fillcolor="#231F20", fontcolor="white"]
+            kafka [label="kafka\nKafka 8.2.2 (KRaft)\nkafka.local-env.com\n:9092", fillcolor="#231F20", fontcolor="white"]
+            kafka_dashboards [label="kafka-dashboards\nKafdrop\n:9000", fillcolor="#E8E8E8", fontcolor="#333333"]
+        }
+    }
+
+    // ---- CERTS (volumen compartido) ----
+    // minica -> nginx (volumen de certs)
+    minica -> nginx [label="  certs/", color="#4A4A4A", style=dashed]
+
+    // ---- DNS ----
+    // app -> DNS del SO
+    app -> so_dns [label="  consulta DNS", color="#888888"]
+    // SO DNS -> bind
+    so_dns -> bind [label="  (53/udp)", color="#888888"]
+    // bind -> so_dns (respuesta vista external: 127.0.0.1)
+    bind -> so_dns [label="ext: 127.0.0.1 ", color="#888888", style=dashed]
+    // bind -> nginx (respuesta vista internal: 10.0.1.2)
+    bind -> nginx [label="int: 10.0.1.2 ", color="#888888", style=dashed]
+
+    // ---- TRAFICO APP ----
+    // app -> nginx (HTTP/HTTPS)
+    app -> nginx [label="  :80/:443\nHTTPS", color="#009639"]
+    // app -> nginx (TCP brokers)
+    app -> nginx [label="  :9092 Kafka TLS\n:61617 AMQ TLS", color="#231F20"]
+
+    // ---- NGINX -> BACKENDS HTTP ----
+    nginx -> opensearch [label="  HTTPS\n:9200", color="#005EB8"]
+    nginx -> opensearch_dashboards [label="  HTTP\n:5601", color="#005EB8"]
+    nginx -> localstack [label="  HTTP\n:4566", color="#FF9900"]
+    nginx -> activemq [label="  HTTP\n:8161 (UI)", color="#888888"]
+    nginx -> kafka_dashboards [label="  HTTP\n:9000", color="#888888"]
+
+    // ---- NGINX -> BACKENDS TCP STREAM ----
+    nginx -> activemq [label="  TCP\n:61616", color="#231F20"]
+    nginx -> kafka [label="  TCP\n:9092", color="#231F20"]
+
+    // ---- DEPENDENCIAS INTERNAS ----
+    opensearch_dashboards -> opensearch [color="#005EB8", style=dashed, arrowhead=none, label="  depends_on"]
+    localstack -> opensearch [color="#FF9900", style=dashed, arrowhead=none, label="  OpenSearch backend"]
+    kafka_dashboards -> kafka [color="#666666", style=dashed, arrowhead=none]
+}

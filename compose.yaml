@@ -1,0 +1,225 @@
+name: local-env
+
+services:
+  dashboard:
+    build: services/dashboard
+    image: local-env/dashboard:latest
+    container_name: dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./services/nginx/etc/nginx/conf.d:/etc/nginx/conf.d
+      - ./services/minica/app/certs:/certs:ro
+      - .:/workspace:ro
+      - ./services/dashboard/backend:/app
+      - ./services/dashboard/frontend/dist:/app/static
+    networks:
+      - local-env-net
+    depends_on:
+      - bind
+      - minica
+
+  opensearch:
+    image: opensearchproject/opensearch:3.7.0
+    container_name: opensearch
+    profiles: [opensearch]
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_PASSWORD}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    ports:
+      - "9200"
+      - "9600"
+    networks:
+      - local-env-net
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:3.7.0
+    container_name: opensearch-dashboards
+    profiles: [opensearch]
+    environment:
+      - OPENSEARCH_HOSTS=${OPENSEARCH_HOSTS}
+      - OPENSEARCH_USERNAME=${OPENSEARCH_USERNAME}
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
+    ports:
+      - "5601"
+    networks:
+      - local-env-net
+    depends_on:
+      - opensearch
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    profiles: [postgres]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-finuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finpass}
+      POSTGRES_DB: ${POSTGRES_DB:-findb}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finuser} -d ${POSTGRES_DB:-findb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - local-env-net
+
+  sql-admin:
+    image: adminer:latest
+    container_name: sql-admin
+    profiles: [postgres]
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    networks:
+      - local-env-net
+    depends_on:
+      - postgres
+
+  localstack:
+    container_name: "localstack"
+    image: localstack/localstack:stable
+    profiles: [localstack]
+    ports:
+      - 4566:4566            # LocalStack Gateway
+      - 4510-4559:4510-4559  # External services port range
+    environment:
+      - DEBUG=${LOCALSTACK_DEBUG:-0}
+      - LOCALSTACK_HOST=${LOCALSTACK_HOST}
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN}
+      - OPENSEARCH_CUSTOM_BACKEND=${OPENSEARCH_HOSTS}
+      - OPENSEARCH_USERNAME=${OPENSEARCH_USERNAME}
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
+    volumes:
+      - ./services/localstack/init/ready.d:/etc/localstack/init/ready.d
+      - ./services/localstack/services:/opt/code/localstack/services
+      - ./services/localstack/volume:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+      - local-env-storage:/etc/localstack/init/ready.d/shared
+    networks:
+      - local-env-net
+    depends_on:
+      - opensearch
+
+  activemq:
+    image: apache/activemq-classic:latest
+    container_name: activemq
+    profiles: [activemq]
+    ports:
+      - "61616"   # ActiveMQ protocol
+      - "8161"    # Admin Console
+    networks:
+      - local-env-net
+
+  kafka:
+    image: confluentinc/cp-kafka:8.2.2
+    container_name: kafka
+    profiles: [kafka]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka.local-env.com:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    ports:
+      - "9092"
+    networks:
+      local-env-net:
+        aliases:
+          - kafka.local-env.com
+
+  kafka-dashboards:
+    image: obsidiandynamics/kafdrop
+    container_name: kafka-dashboards
+    profiles: [kafka]
+    environment:
+      KAFKA_BROKERCONNECT: "kafka:9092"
+      JVM_OPTS: "-Xms32M -Xmx64M"
+    ports:
+      - "9000"
+    networks:
+      - local-env-net
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    volumes:
+      - ./services/nginx/etc/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./services/nginx/etc/nginx/conf.d/http:/etc/nginx/conf.d/http
+      - ./services/nginx/etc/nginx/conf.d/stream:/etc/nginx/conf.d/stream
+      - ./services/minica/app/certs:/etc/nginx/certs
+      - local-env-storage:/etc/nginx/conf.d/http/shared
+      - local-env-storage:/etc/nginx/conf.d/stream/shared
+    ports:
+      - "80:80"
+      - "443:443"
+      - "9092:9092"
+      - "61617:61617"
+    networks:
+      local-env-net:
+        ipv4_address: 10.0.1.2
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - bind
+      - minica
+
+  bind:
+    build: services/bind
+    image: local-env/bind:latest
+    container_name: bind
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+    volumes:
+      - ./services/bind/named.conf:/etc/bind/named.conf
+      - ./services/bind/zones:/etc/bind/zones
+    restart: always
+    networks:
+      local-env-net:
+        ipv4_address: 10.0.1.3
+
+  minica:
+    build: services/minica
+    image: local-env/minica:latest
+    container_name: minica
+    environment:
+      - LOCALSTACK_HOST=${LOCALSTACK_HOST}
+    volumes:
+      - ./services/minica/app:/app
+      - ./services/nginx/etc/nginx/conf.d:/etc/nginx/conf.d
+      - local-env-storage:/local-env-storage
+
+volumes:
+  local-env-storage:
+    name: local-env-storage
+    driver: local
+  opensearch-data:
+    name: opensearch-data
+    driver: local
+  postgres-data:
+    name: postgres-data
+    driver: local
+
+networks:
+  local-env-net:
+    name: local-env-net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.1.0/24
+          gateway: 10.0.1.1
+          ip_range: 10.0.1.64/26

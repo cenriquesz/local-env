@@ -1,0 +1,6 @@
+# Ignorar el contenido del directorio actual
+*
+
+# No ignorar el propio archivo .gitignore
+!.gitignore
+!init.sh
