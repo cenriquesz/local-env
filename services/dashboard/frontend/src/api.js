@@ -1,7 +1,24 @@
 const BASE = ''
 
+export async function getHealth() {
+  const res = await fetch(`${BASE}/api/health`)
+  if (!res.ok) throw new Error(`Error ${res.status}`)
+  return res.json()
+}
+
 export async function getServices() {
   const res = await fetch(`${BASE}/api/services`)
+  if (!res.ok) throw new Error(`Error ${res.status}`)
+  return res.json()
+}
+
+export async function getCoreServices() {
+  const data = await getHealth()
+  return data.core ?? []
+}
+
+export async function restartCoreService(id) {
+  const res = await fetch(`${BASE}/api/core/${id}/restart`, { method: 'POST' })
   if (!res.ok) throw new Error(`Error ${res.status}`)
   return res.json()
 }
@@ -67,8 +84,38 @@ export async function restartMinica() {
   return res.json()
 }
 
-export async function getLocalstackHealth() {
-  const res = await fetch(`${BASE}/api/localstack/health`)
+export async function getServiceCategories() {
+  const res = await fetch(`${BASE}/api/service-categories`)
+  if (!res.ok) throw new Error(`Error ${res.status}`)
+  return res.json()
+}
+
+export async function getLocalstackServices() {
+  const res = await fetch(`${BASE}/api/localstack/services`)
+  if (!res.ok) throw new Error(`Error ${res.status}`)
+  return res.json()
+}
+
+export async function getPostgresTables() {
+  const res = await fetch(`${BASE}/api/postgres/tables`)
+  if (!res.ok) throw new Error(`Error ${res.status}`)
+  return res.json()
+}
+
+export async function getKafkaTopics() {
+  const res = await fetch(`${BASE}/api/kafka/topics`)
+  if (!res.ok) throw new Error(`Error ${res.status}`)
+  return res.json()
+}
+
+export async function getActivemqQueues() {
+  const res = await fetch(`${BASE}/api/activemq/queues`)
+  if (!res.ok) throw new Error(`Error ${res.status}`)
+  return res.json()
+}
+
+export async function getOpensearchIndices() {
+  const res = await fetch(`${BASE}/api/opensearch/indices`)
   if (!res.ok) throw new Error(`Error ${res.status}`)
   return res.json()
 }

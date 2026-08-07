@@ -2,12 +2,7 @@
   <div class="bg-gh-card border border-gh-border rounded-lg flex flex-col">
     <!-- Header -->
     <div class="px-4 py-3 border-b border-gh-border">
-      <h3
-        :class="[
-          'text-sm font-semibold',
-          isSinIdentificar ? 'text-gh-muted italic' : 'text-gh-text'
-        ]"
-      >
+      <h3 class="text-sm font-semibold text-gh-text">
         {{ app.name }}
       </h3>
     </div>
@@ -50,10 +45,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
 import StatusBadge from './StatusBadge.vue'
 
-const props = defineProps({
+defineProps({
   app: {
     type: Object,
     required: true
@@ -61,6 +55,4 @@ const props = defineProps({
 })
 
 defineEmits(['open-api'])
-
-const isSinIdentificar = computed(() => props.app.name === 'Sin identificar')
 </script>

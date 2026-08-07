@@ -312,7 +312,6 @@ LOCALSTACK_INIT_DIR = $(LOCAL_ENV_DIR)/services/localstack/init/ready.d
 # los encuentren desde el primer arranque.
 setup-local-env:
 	cp local-env-setup/nginx/mi-app.local-env.com.conf $(NGINX_HTTP_DIR)/
-	cp local-env-setup/nginx/local-env.json $(NGINX_HTTP_DIR)/mi-app.local-env.com.json
 	cp local-env-setup/localstack/mi-app-init.sh $(LOCALSTACK_INIT_DIR)/
 
 # Arranca todo el entorno: primero local-env, luego la app.
@@ -336,7 +335,6 @@ down:
 # Útil para dejar local-env en estado limpio entre sesiones.
 clean-local-env:
 	rm -f $(NGINX_HTTP_DIR)/mi-app.local-env.com.conf
-	rm -f $(NGINX_HTTP_DIR)/mi-app.local-env.com.json
 	rm -f $(LOCALSTACK_INIT_DIR)/mi-app-init.sh
 ```
 
@@ -505,33 +503,54 @@ print(f"OpenSearch {info['version']['number']} listo")
 
 local-env incluye un dashboard web accesible en `https://dashboard.local-env.com`. La sección "Apps" del dashboard detecta automáticamente todas las apps externas que hayan copiado un `.conf` en el directorio de extensión de nginx - sin necesidad de registro manual.
 
+### Comprobar disponibilidad antes de arrancar: `GET /api/health`
+
+Si tu app depende de servicios opcionales de local-env (Kafka, OpenSearch, LocalStack...), consulta `https://dashboard.local-env.com/api/health` antes de arrancar para saber, en una sola llamada, qué ofrece el entorno y si está arrancado:
+
+```bash
+curl -s https://dashboard.local-env.com/api/health | python3 -m json.tool
+```
+
+```json
+{
+  "status": "healthy",
+  "core": [
+    {"id": "nginx", "label": "nginx (proxy)", "status": "running", "containers": [...]},
+    {"id": "minica", "label": "minica (CA)", "status": "idle", "containers": [...]}
+  ],
+  "services": [
+    {"id": "kafka", "label": "Kafka", "status": "stopped", "urls": [...], "containers": [...]}
+  ]
+}
+```
+
+`status: "healthy"` indica que el core de local-env (nginx, bind, minica, dashboard) funciona correctamente. Cada entrada de `services` trae su propio `status` (`running` / `partial` / `stopped`) para que decidas si necesitas arrancarlo (`POST /api/services/{id}/start`, ver más abajo) antes de continuar. Es preferible a llamar a `GET /api/services` a solas, porque esa ruta solo cubre los servicios opcionales y no informa del estado del core.
+
+### Arrancar/parar servicios opcionales por API
+
+`POST /api/services/{id}/start` y `POST /api/services/{id}/stop` (`id` es `opensearch`, `localstack`, `activemq`, `kafka` o `postgres`) sincronizan la config de nginx del servicio, gestionan sus contenedores con `docker compose` y recargan nginx. Ambos están documentados en el Swagger (`https://dashboard.local-env.com/docs`, tag `servicios`).
+
+**Recargar los scripts de LocalStack (`ready.d/`) sin reiniciar todo el entorno:** LocalStack solo ejecuta los scripts de `services/localstack/init/ready.d/` una vez, al arrancar (ver sección 6). Si añades un script nuevo con LocalStack ya corriendo, no se recoge solo — necesitas que el contenedor vuelva a arrancar para que su entrypoint los relea. Encadenar `POST /api/services/localstack/stop` y luego `POST /api/services/localstack/start` logra justo eso (para el contenedor sin destruirlo y lo vuelve a levantar), sin tocar el resto de servicios de local-env.
+
 **Limitación conocida:** el dashboard monta directamente `services/nginx/etc/nginx/conf.d` del host, no el volumen `local-env-storage`. Las apps que dejen su `.conf` únicamente en `local-env-storage/nginx-http/` (sección 5) no aparecerán en el dashboard aunque nginx sí las sirva correctamente. Si necesitas visibilidad en el dashboard, usa el mecanismo de bind mount (sección 2/4).
 
 ### Qué detecta el dashboard
 
 El dashboard escanea `services/nginx/etc/nginx/conf.d/http/` y muestra cualquier fichero `.conf` que no pertenezca al core de local-env. Para cada dominio detectado, intenta resolver el contenedor upstream leyendo el bloque `set $upstream` del `.conf` y consulta su estado a Docker.
 
-### Identificar tu app: `local-env.json`
+### Identificar tu app
 
-Sin metadatos adicionales, el dashboard agrupa los dominios bajo "Sin identificar". Para que aparezcan con el nombre correcto, crea un fichero `local-env.json` en tu carpeta de configuración de local-env y cópialo junto al `.conf`:
-
-```json
-{
-  "app": "mi-app",
-  "repo": "github.com/cenriquesz/mi-app"
-}
-```
-
-El fichero debe nombrarse igual que el `.conf` pero con extensión `.json`. Por ejemplo, si el conf es `mi-app.local-env.com.conf`, el fichero de metadatos es `mi-app.local-env.com.json`. El Makefile de ejemplo de la sección 7 ya lo copia automáticamente.
+El dashboard usa directamente el nombre de dominio del `.conf` (sin el sufijo `.local-env.com` o `.local-aws.com`) como nombre de la app. No hace falta ningún fichero de metadatos adicional: si tu conf es `mi-app.local-env.com.conf`, el dashboard la mostrará como "mi-app".
 
 Resultado en el dashboard:
 
 ```
 Apps detectadas
   mi-app
-    api.local-env.com     running   [Abrir]
-    web.local-env.com     running   [Abrir]
+    mi-app.local-env.com     running   [Abrir]
 ```
+
+**Limitación:** cada dominio se agrupa como una app independiente. Si tu app expone varios subdominios (por ejemplo `api.mi-app.local-env.com` y `web.mi-app.local-env.com`), aparecerán como dos apps separadas en vez de agruparse bajo un mismo nombre.
 
 ### Requisito del .conf para detección de estado
 

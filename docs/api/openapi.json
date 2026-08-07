@@ -1,434 +1,631 @@
 {
-  "openapi": "3.1.0",
-  "info": {
-    "title": "local-env dashboard",
-    "description": "API del dashboard de local-env: estado de servicios, apps externas, certificados TLS y control basico del entorno.",
-    "version": "1.2.0"
-  },
-  "paths": {
-    "/api/services": {
-      "get": {
-        "tags": [
-          "servicios"
-        ],
-        "summary": "Listar servicios opcionales y su estado",
-        "description": "Devuelve cada servicio opcional (OpenSearch, LocalStack, ActiveMQ, Kafka, Postgres) con el estado de sus contenedores y sus URLs.",
-        "operationId": "get_services_api_services_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
+    "openapi": "3.1.0",
+    "info": {
+        "title": "local-env dashboard",
+        "description": "API del dashboard de local-env: estado de servicios, apps externas, certificados TLS y control basico del entorno.",
+        "version": "1.2.0"
     },
-    "/api/services/{service_id}/start": {
-      "post": {
-        "tags": [
-          "servicios"
-        ],
-        "summary": "Arrancar un servicio opcional",
-        "description": "Sincroniza la config de nginx del servicio, levanta sus contenedores con docker compose y recarga nginx.",
-        "operationId": "start_service_api_services__service_id__start_post",
-        "parameters": [
-          {
-            "name": "service_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Service Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+    "paths": {
+        "/api/services": {
+            "get": {
+                "tags": [
+                    "servicios"
+                ],
+                "summary": "Listar servicios opcionales y su estado",
+                "description": "Devuelve cada servicio opcional (OpenSearch, LocalStack, ActiveMQ, Kafka, Postgres) con el estado de sus contenedores y sus URLs.",
+                "operationId": "get_services_api_services_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
                 }
-              }
             }
-          }
-        }
-      }
-    },
-    "/api/services/{service_id}/stop": {
-      "post": {
-        "tags": [
-          "servicios"
-        ],
-        "summary": "Parar un servicio opcional",
-        "description": "Detiene los contenedores del servicio y retira su config de nginx.",
-        "operationId": "stop_service_api_services__service_id__stop_post",
-        "parameters": [
-          {
-            "name": "service_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Service Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/apps": {
-      "get": {
-        "tags": [
-          "apps"
-        ],
-        "summary": "Listar apps externas",
-        "description": "Detecta apps externas escaneando los .conf de nginx que no son del core de local-env.",
-        "operationId": "get_apps_api_apps_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/apps/{domain}/openapi": {
-      "get": {
-        "tags": [
-          "apps"
-        ],
-        "summary": "Detectar y proxear el spec OpenAPI de una app",
-        "description": "Prueba rutas habituales de OpenAPI/Swagger (`/openapi.json`, `/v3/api-docs`, `/swagger.json`...)\ncontra el dominio, a traves de nginx, y devuelve el primer spec valido encontrado.",
-        "operationId": "get_app_openapi_api_apps__domain__openapi_get",
-        "parameters": [
-          {
-            "name": "domain",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Domain"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/certs": {
-      "get": {
-        "tags": [
-          "certificados"
-        ],
-        "summary": "Listar certificados TLS por dominio",
-        "description": "Certificados wildcard generados por minica en `live/`, con fecha de expiracion y el keystore asociado si existe.",
-        "operationId": "get_certs_api_certs_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/certs/stores": {
-      "get": {
-        "tags": [
-          "certificados"
-        ],
-        "summary": "Listar keystores y truststores disponibles",
-        "description": "Lista los keystores/truststores (.ks/.ts/.p12) generados por minica, listos para descargar.",
-        "operationId": "get_cert_stores_api_certs_stores_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/certs/stores/{filename}": {
-      "get": {
-        "tags": [
-          "certificados"
-        ],
-        "summary": "Descargar un keystore o truststore",
-        "description": "Descarga un fichero concreto de `certs/stores/` (p.ej. `ca-cert.ts` o `local-env.com.ks`), contraseña `password`.",
-        "operationId": "download_cert_store_api_certs_stores__filename__get",
-        "parameters": [
-          {
-            "name": "filename",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Filename"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/nginx/reload": {
-      "post": {
-        "tags": [
-          "nginx"
-        ],
-        "summary": "Recargar la configuracion de nginx",
-        "operationId": "reload_nginx_api_nginx_reload_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/minica/restart": {
-      "post": {
-        "tags": [
-          "minica"
-        ],
-        "summary": "Reiniciar minica y regenerar certificados",
-        "description": "Reinicia el contenedor de minica (regenera los certificados que falten) y recarga nginx.",
-        "operationId": "restart_minica_api_minica_restart_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/logs/{container_name}": {
-      "get": {
-        "tags": [
-          "logs"
-        ],
-        "summary": "Stream de logs de un contenedor (SSE)",
-        "description": "Server-Sent Events con las ultimas 100 lineas de log del contenedor y las siguientes en tiempo real.",
-        "operationId": "stream_logs_api_logs__container_name__get",
-        "parameters": [
-          {
-            "name": "container_name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Container Name"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/localstack/health": {
-      "get": {
-        "tags": [
-          "aws"
-        ],
-        "summary": "Salud de LocalStack",
-        "description": "Proxy al endpoint de salud de LocalStack (`/_localstack/health`).",
-        "operationId": "get_localstack_health_api_localstack_health_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    }
-  },
-  "components": {
-    "schemas": {
-      "HTTPValidationError": {
-        "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "type": "array",
-            "title": "Detail"
-          }
         },
-        "type": "object",
-        "title": "HTTPValidationError"
-      },
-      "ValidationError": {
-        "properties": {
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
+        "/api/service-categories": {
+            "get": {
+                "tags": [
+                    "servicios"
+                ],
+                "summary": "Categorias para agrupar servicios",
+                "description": "Orden y etiquetas de las categorias usadas para agrupar servicios en la UI (sidebar y vista Servicios).",
+                "operationId": "get_service_categories_api_service_categories_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/health": {
+            "get": {
+                "tags": [
+                    "salud"
+                ],
+                "summary": "Salud agregada de local-env (core + servicios opcionales)",
+                "description": "Vista de una sola llamada para que apps externas comprueben, antes de arrancar, que local-env\nesta disponible y que servicios opcionales (Kafka, OpenSearch, LocalStack...) tienen arrancados.\n\n`status` es \"healthy\" si todo el core esta sano (running, o idle para minica tras generar los\ncerts), \"degraded\" si algo del core esta parcial, parado o en error, y no tiene en cuenta el\nestado de los servicios opcionales (son opcionales por definicion).",
+                "operationId": "get_health_api_health_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/services/{service_id}/start": {
+            "post": {
+                "tags": [
+                    "servicios"
+                ],
+                "summary": "Arrancar un servicio opcional",
+                "description": "Sincroniza la config de nginx del servicio, levanta sus contenedores con docker compose y recarga nginx.",
+                "operationId": "start_service_api_services__service_id__start_post",
+                "parameters": [
+                    {
+                        "name": "service_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Service Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/services/{service_id}/stop": {
+            "post": {
+                "tags": [
+                    "servicios"
+                ],
+                "summary": "Parar un servicio opcional",
+                "description": "Detiene los contenedores del servicio y retira su config de nginx.",
+                "operationId": "stop_service_api_services__service_id__stop_post",
+                "parameters": [
+                    {
+                        "name": "service_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Service Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/apps": {
+            "get": {
+                "tags": [
+                    "apps"
+                ],
+                "summary": "Listar apps externas",
+                "description": "Detecta apps externas escaneando los .conf de nginx que no son del core de local-env.",
+                "operationId": "get_apps_api_apps_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/apps/{domain}/openapi": {
+            "get": {
+                "tags": [
+                    "apps"
+                ],
+                "summary": "Detectar y proxear el spec OpenAPI de una app",
+                "description": "Prueba rutas habituales de OpenAPI/Swagger (`/openapi.json`, `/v3/api-docs`, `/swagger.json`...)\ncontra el dominio, a traves de nginx, y devuelve el primer spec valido encontrado.",
+                "operationId": "get_app_openapi_api_apps__domain__openapi_get",
+                "parameters": [
+                    {
+                        "name": "domain",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Domain"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/certs": {
+            "get": {
+                "tags": [
+                    "certificados"
+                ],
+                "summary": "Listar certificados TLS por dominio",
+                "description": "Certificados wildcard generados por minica en `live/`, con fecha de expiracion y el keystore asociado si existe.",
+                "operationId": "get_certs_api_certs_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/certs/stores": {
+            "get": {
+                "tags": [
+                    "certificados"
+                ],
+                "summary": "Listar keystores y truststores disponibles",
+                "description": "Lista los keystores/truststores (.ks/.ts/.p12) generados por minica, listos para descargar.",
+                "operationId": "get_cert_stores_api_certs_stores_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/certs/stores/{filename}": {
+            "get": {
+                "tags": [
+                    "certificados"
+                ],
+                "summary": "Descargar un keystore o truststore",
+                "description": "Descarga un fichero concreto de `certs/stores/` (p.ej. `ca-cert.ts` o `local-env.com.ks`), contrase\u00f1a `password`.",
+                "operationId": "download_cert_store_api_certs_stores__filename__get",
+                "parameters": [
+                    {
+                        "name": "filename",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Filename"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/nginx/reload": {
+            "post": {
+                "tags": [
+                    "nginx"
+                ],
+                "summary": "Recargar la configuracion de nginx",
+                "operationId": "reload_nginx_api_nginx_reload_post",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/minica/restart": {
+            "post": {
+                "tags": [
+                    "minica"
+                ],
+                "summary": "Reiniciar minica y regenerar certificados",
+                "description": "Reinicia el contenedor de minica (regenera los certificados que falten) y recarga nginx.",
+                "operationId": "restart_minica_api_minica_restart_post",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/core/{service_id}/restart": {
+            "post": {
+                "tags": [
+                    "core"
+                ],
+                "summary": "Reiniciar un servicio core",
+                "description": "Reinicia el/los contenedor(es) de un servicio core (nginx, bind, minica, dashboard).\nNo hay endpoint para pararlos: son necesarios para que local-env funcione.",
+                "operationId": "restart_core_service_api_core__service_id__restart_post",
+                "parameters": [
+                    {
+                        "name": "service_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Service Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/logs/{container_name}": {
+            "get": {
+                "tags": [
+                    "logs"
+                ],
+                "summary": "Stream de logs de un contenedor (SSE)",
+                "description": "Server-Sent Events con las ultimas 100 lineas de log del contenedor y las siguientes en tiempo real.\n\n`c.logs(stream=True, follow=True)` del SDK de Docker es un iterador sincrono y bloqueante: cada\nlinea espera en un socket hasta que el contenedor escribe algo. Si se itera directamente dentro\nde una corrutina, ese bloqueo congela TODO el event loop de asyncio (todo uvicorn, no solo esta\npeticion) mientras el contenedor este callado. Por eso la lectura se hace en un hilo aparte que\nempuja las lineas a una cola, y la corrutina solo hace `await queue.get()`.",
+                "operationId": "stream_logs_api_logs__container_name__get",
+                "parameters": [
+                    {
+                        "name": "container_name",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Container Name"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/localstack/health": {
+            "get": {
+                "tags": [
+                    "aws"
+                ],
+                "summary": "Salud de LocalStack",
+                "description": "Proxy al endpoint de salud de LocalStack (`/_localstack/health`).",
+                "operationId": "get_localstack_health_api_localstack_health_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/localstack/services": {
+            "get": {
+                "tags": [
+                    "aws"
+                ],
+                "summary": "Servicios AWS de LocalStack: endpoint, estado y recursos creados",
+                "description": "Una tarjeta por servicio AWS emulado (S3, SQS, SES, STS, OpenSearch), con su endpoint, si esta\nactivo o solo disponible bajo demanda, y sus recursos ya creados (buckets, colas) con su ARN\npara los servicios donde eso aplica.",
+                "operationId": "get_localstack_services_api_localstack_services_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/postgres/tables": {
+            "get": {
+                "tags": [
+                    "db"
+                ],
+                "summary": "Tablas creadas en la base de datos Postgres",
+                "description": "Lista las tablas del esquema `public` y su numero de filas, ejecutando `psql` dentro del\npropio contenedor de Postgres (credenciales leidas de su entorno real, no de un .env).",
+                "operationId": "get_postgres_tables_api_postgres_tables_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/kafka/topics": {
+            "get": {
+                "tags": [
+                    "mensajeria"
+                ],
+                "summary": "Topics creados en Kafka",
+                "description": "Lista los topics de Kafka (excluyendo los internos `__consumer_offsets` etc.) ejecutando\n`kafka-topics` dentro del propio contenedor.",
+                "operationId": "get_kafka_topics_api_kafka_topics_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/activemq/queues": {
+            "get": {
+                "tags": [
+                    "mensajeria"
+                ],
+                "summary": "Colas y topics creados en ActiveMQ",
+                "description": "Lista las colas y topics realmente creados en el broker de ActiveMQ, via la API Jolokia\nde su consola de administracion.",
+                "operationId": "get_activemq_queues_api_activemq_queues_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/opensearch/indices": {
+            "get": {
+                "tags": [
+                    "db"
+                ],
+                "summary": "Indices creados en OpenSearch",
+                "description": "Lista los indices de OpenSearch (excluyendo los ocultos que empiezan por `.`), con\nautenticacion admin leida del entorno real del contenedor.",
+                "operationId": "get_opensearch_indices_api_opensearch_indices_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "HTTPValidationError": {
+                "properties": {
+                    "detail": {
+                        "items": {
+                            "$ref": "#/components/schemas/ValidationError"
+                        },
+                        "type": "array",
+                        "title": "Detail"
+                    }
                 },
-                {
-                  "type": "integer"
-                }
-              ]
+                "type": "object",
+                "title": "HTTPValidationError"
             },
-            "type": "array",
-            "title": "Location"
-          },
-          "msg": {
-            "type": "string",
-            "title": "Message"
-          },
-          "type": {
-            "type": "string",
-            "title": "Error Type"
-          }
+            "ValidationError": {
+                "properties": {
+                    "loc": {
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "integer"
+                                }
+                            ]
+                        },
+                        "type": "array",
+                        "title": "Location"
+                    },
+                    "msg": {
+                        "type": "string",
+                        "title": "Message"
+                    },
+                    "type": {
+                        "type": "string",
+                        "title": "Error Type"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "loc",
+                    "msg",
+                    "type"
+                ],
+                "title": "ValidationError"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "salud",
+            "description": "Vista agregada de salud de local-env (core + servicios opcionales) en una sola llamada, pensada para apps externas que quieran verificar sus dependencias antes de arrancar."
         },
-        "type": "object",
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
-        "title": "ValidationError"
-      }
-    }
-  },
-  "tags": [
-    {
-      "name": "servicios",
-      "description": "Arranque, parada y estado de los servicios opcionales (OpenSearch, LocalStack, ActiveMQ, Kafka, Postgres)."
-    },
-    {
-      "name": "apps",
-      "description": "Apps externas detectadas via los .conf de nginx fuera del core, incluyendo deteccion de su spec OpenAPI/Swagger si lo exponen."
-    },
-    {
-      "name": "certificados",
-      "description": "Certificados TLS y almacenes (keystores/truststores) generados por minica."
-    },
-    {
-      "name": "nginx",
-      "description": "Recarga de configuracion de nginx."
-    },
-    {
-      "name": "minica",
-      "description": "Gestion de la CA local y regeneracion de certificados."
-    },
-    {
-      "name": "logs",
-      "description": "Streaming de logs de contenedores."
-    },
-    {
-      "name": "aws",
-      "description": "Estado de LocalStack (emulacion de AWS)."
-    }
-  ]
+        {
+            "name": "core",
+            "description": "Reinicio de los servicios core de local-env (nginx, bind, minica, dashboard). No se pueden parar via API: son necesarios para que el entorno funcione."
+        },
+        {
+            "name": "servicios",
+            "description": "Arranque, parada y estado de los servicios opcionales (OpenSearch, LocalStack, ActiveMQ, Kafka, Postgres)."
+        },
+        {
+            "name": "apps",
+            "description": "Apps externas detectadas via los .conf de nginx fuera del core, incluyendo deteccion de su spec OpenAPI/Swagger si lo exponen."
+        },
+        {
+            "name": "certificados",
+            "description": "Certificados TLS y almacenes (keystores/truststores) generados por minica."
+        },
+        {
+            "name": "nginx",
+            "description": "Recarga de configuracion de nginx."
+        },
+        {
+            "name": "minica",
+            "description": "Gestion de la CA local y regeneracion de certificados."
+        },
+        {
+            "name": "logs",
+            "description": "Streaming de logs de contenedores."
+        },
+        {
+            "name": "aws",
+            "description": "Estado de LocalStack (emulacion de AWS) y sus recursos (buckets, colas)."
+        },
+        {
+            "name": "db",
+            "description": "Detalle de las bases de datos disponibles (tablas de Postgres, indices de OpenSearch)."
+        },
+        {
+            "name": "mensajeria",
+            "description": "Detalle de los sistemas de mensajeria (topics de Kafka, colas de ActiveMQ)."
+        }
+    ]
 }

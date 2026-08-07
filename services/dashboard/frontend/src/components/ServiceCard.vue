@@ -54,30 +54,6 @@
       </div>
     </div>
 
-    <!-- Health de LocalStack -->
-    <LocalstackHealth v-if="service.id === 'localstack' && service.status === 'running'" />
-
-    <!-- Endpoints de API (no browser) -->
-    <div v-if="service.endpoints && service.endpoints.length" class="px-4 py-3 border-b border-gh-border space-y-1.5">
-      <p class="text-gh-muted text-xs font-medium uppercase tracking-wide mb-2">Endpoints</p>
-      <div v-for="ep in service.endpoints" :key="ep.url" class="flex items-center gap-2 group">
-        <span class="text-gh-muted text-xs font-mono flex-1 truncate opacity-70" :title="ep.url">
-          <span class="text-gh-text opacity-50 mr-1.5">{{ ep.label }}</span>{{ ep.url }}
-        </span>
-        <button
-          @click="copyUrl(ep.url)"
-          :title="'Copiar ' + ep.url"
-          class="flex-shrink-0 text-gh-muted hover:text-gh-text transition-colors opacity-0 group-hover:opacity-100"
-        >
-          <span v-if="copiedUrl === ep.url" class="text-gh-green text-xs">Copiado</span>
-          <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-          </svg>
-        </button>
-      </div>
-    </div>
-
     <!-- Footer actions -->
     <div class="px-4 py-3 flex items-center gap-2 mt-auto">
       <button
@@ -112,7 +88,6 @@
 <script setup>
 import { ref, computed } from 'vue'
 import StatusBadge from './StatusBadge.vue'
-import LocalstackHealth from './LocalstackHealth.vue'
 import { startService, stopService } from '../api.js'
 
 const props = defineProps({

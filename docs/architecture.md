@@ -166,7 +166,57 @@ Una copia estatica del spec (para referencia offline o para importar en Postman/
 curl -s https://dashboard.local-env.com/openapi.json | python3 -m json.tool > docs/api/openapi.json
 ```
 
-Los endpoints estan agrupados por tags: `servicios` (arrancar/parar/estado), `apps` (apps externas detectadas), `certificados` (certificados TLS y descarga de keystores/truststores), `nginx` (recarga de config), `minica` (regenerar certificados), `logs` (streaming SSE) y `aws` (salud de LocalStack).
+Los endpoints estan agrupados por tags: `salud` (vista agregada de salud del entorno), `core` (reinicio de nginx/bind/minica/dashboard), `servicios` (arrancar/parar/estado de los opcionales), `apps` (apps externas detectadas), `certificados` (certificados TLS y descarga de keystores/truststores), `nginx` (recarga de config), `minica` (regenerar certificados), `logs` (streaming SSE), `aws` (salud y servicios de LocalStack), `db` (tablas de Postgres, indices de OpenSearch) y `mensajeria` (topics de Kafka, colas de ActiveMQ).
+
+### `POST /api/core/{id}/restart`: reiniciar un servicio core
+
+`id` es `nginx`, `bind`, `minica` o `dashboard`. Reinicia el/los contenedor(es) del servicio (equivalente a `docker compose restart <contenedor>`) y, salvo que el servicio sea el propio `nginx`, recarga nginx despues. **No existe endpoint para pararlos** (a diferencia de los servicios opcionales) - son necesarios para que local-env funcione, asi que la unica accion disponible es reiniciar.
+
+Caso especial: reiniciar `dashboard` reinicia el contenedor que esta sirviendo esa misma peticion. Para poder devolver la respuesta HTTP antes de que el proceso muera, el reinicio se dispara en un hilo aparte con un pequeno delay (`_delayed_restart` en `main.py`) en vez de ejecutarse de forma sincrona como en los demas casos.
+
+En el dashboard, la pestaña **Servicios** tiene ahora una seccion "Core" (ademas de la de servicios opcionales) con una tarjeta por cada uno de estos cuatro, mostrando su estado y con botones para ver sus logs o reiniciarlo — sin boton de parar.
+
+### Agrupacion por categoria y paneles de detalle
+
+Cada servicio (core u opcional) pertenece a una categoria (`core`, `aws`, `db`, `mensajeria`), expuesta en el campo `category` de `GET /api/services` y `GET /api/health`, y listada con su orden y etiqueta en `GET /api/service-categories`. OpenSearch y Postgres comparten la categoria `db` (ambos son almacenes de datos), aunque uno se arranque/pare de forma independiente del otro. La pestaña **Servicios** del dashboard usa esa categoria para dos cosas:
+
+- Sub-navegacion en el sidebar bajo "Servicios" (Core / AWS / Base de datos / Mensajeria, en ese orden), que filtra que categoria se muestra en la vista. No hay una entrada "Todos": pulsar el propio boton "Servicios" ya resetea la categoria a `all` (todas), asi que una entrada aparte seria redundante.
+- Ademas de las tarjetas de estado y acciones rapidas, las categorias `db` y `mensajeria` muestran debajo un panel de detalle por servicio con los recursos realmente creados (no solo si el contenedor esta arrancado):
+  - **Postgres** (`GET /api/postgres/tables`): tablas del esquema `public` y su numero de filas, via `psql` ejecutado dentro del contenedor con las credenciales leidas de su entorno real (no de un `.env`).
+  - **OpenSearch** (`GET /api/opensearch/indices`): indices creados (excluyendo los de sistema y los internos de plugins como `security-auditlog-*` o `top_queries-*`), via `_cat/indices` con auth basica `admin:<OPENSEARCH_INITIAL_ADMIN_PASSWORD>`.
+  - **Kafka** (`GET /api/kafka/topics`): topics existentes (excluyendo los internos `__*`), via `kafka-topics --list` dentro del contenedor.
+  - **ActiveMQ** (`GET /api/activemq/queues`): colas y topics existentes, via la API Jolokia de su consola de administracion (`http://activemq:8161/api/jolokia`, requiere el header `Origin` y auth basica `admin:admin` por defecto).
+
+  Estos paneles solo se muestran si el servicio correspondiente esta `running`, y hacen polling cada 15s de forma independiente a las tarjetas.
+
+Las tarjetas de la categoria `core` (nginx, bind, minica, dashboard) usan un diseno mas compacto que el resto (fila unica con nombre, estado, contenedores y acciones en iconos) porque solo informan de estado y accion de reinicio, sin URLs ni endpoints — no necesitan el mismo espacio que las tarjetas de servicios opcionales.
+
+### LocalStack: tarjeta de contenedor + una tarjeta por servicio AWS
+
+A diferencia del resto de servicios opcionales, LocalStack emula muchos servicios AWS distintos desde un unico contenedor, asi que una sola tarjeta con endpoints mezclados quedaba poco legible. La categoria `aws` separa eso en varias tarjetas:
+
+- La tarjeta normal de `localstack` (via `GET /api/services`) representa solo el contenedor: estado, arrancar/parar, logs — igual que cualquier otro servicio opcional, sin URLs ni endpoints.
+- `GET /api/localstack/services` devuelve, ademas, una entrada por cada servicio AWS relevante (S3, SQS, SES, STS, OpenSearch-via-LocalStack) con su endpoint (`https://<servicio>.local-aws.com`), su estado (`running` si esta siendo usado activamente o `available` si esta emulado pero sin uso, segun `_localstack/health`) y, para S3 y SQS, sus recursos ya creados con el ARN real:
+  - Buckets S3: `awslocal s3api list-buckets` ya devuelve el ARN en la propia respuesta.
+  - Colas SQS: `awslocal sqs list-queues` da las URLs; el ARN de cada una se obtiene con una llamada adicional `awslocal sqs get-queue-attributes --attribute-names QueueArn` por cola.
+
+  El componente `LocalstackServicesGrid.vue` pinta esas tarjetas (`LocalstackServiceCard.vue`) directamente dentro de la misma rejilla que la tarjeta del contenedor, no como un panel aparte.
+
+### Logs de contenedores: panel inline dentro de cada bloque, no un drawer global
+
+El boton "Logs" de una tarjeta ya no abre un drawer fijo a la derecha de toda la pantalla (`LogsDrawer.vue`, eliminado). En su lugar, `ServicesView.vue` guarda que categoria pidio ver logs y de que contenedores (`logsGroupId` / `logsContainers`), y pinta un `LogsPanel.vue` justo debajo de la rejilla de tarjetas de esa categoria, dentro del mismo bloque — si pides los logs de `nginx` los ves debajo de las tarjetas de Core, sin salir de esa seccion. Con las tarjetas mas compactas, el drawer lateral de 600px ya no encajaba bien con el resto del layout.
+
+**Cuidado con el streaming de logs y el event loop:** `GET /api/logs/{container_name}` (SSE) usa `docker_client.containers.get(...).logs(stream=True, follow=True)`, que es un iterador **sincrono y bloqueante** del SDK de Docker — cada linea espera en un socket hasta que el contenedor escribe algo. Iterarlo directamente dentro de una corrutina `async def` bloquea todo el hilo del event loop de uvicorn (un unico proceso, sin workers) mientras el contenedor este callado, dejando el dashboard entero sin responder a cualquier otra peticion. Por eso la lectura ocurre en un hilo (`threading.Thread`) que empuja cada linea a un `asyncio.Queue` via `loop.call_soon_threadsafe`, y la corrutina solo hace `await queue.get()` — nunca bloquea el loop. Si se toca este endpoint en el futuro, mantener ese patron (o `run_in_threadpool`) para cualquier llamada bloqueante del SDK de Docker dentro de una ruta `async def`.
+
+### `GET /api/health`: punto de entrada recomendado para apps externas
+
+Antes de asumir que un servicio de local-env (Kafka, OpenSearch, LocalStack...) esta disponible, una app externa deberia consultar `GET /api/health`. Devuelve en una sola llamada:
+
+- `status`: `"healthy"` si todo el core (`nginx`, `bind`, `minica`, `dashboard`) esta sano, `"degraded"` en caso contrario. `minica` es un contenedor de un solo uso (genera los certs y termina) — su estado sano es `idle` (`exited` con codigo 0), no `running`.
+- `core`: estado de cada pieza del core, con el detalle de sus contenedores.
+- `services`: el mismo contenido que `GET /api/services` (estado de OpenSearch, LocalStack, ActiveMQ, Kafka, Postgres segun esten habilitados y arrancados).
+
+Es preferible a encadenar `GET /api/services` + comprobaciones manuales del core, porque agrupa ambas cosas en una sola llamada y ya interpreta los casos especiales (como el de `minica`).
 
 ### Vista "API" del propio dashboard
 

@@ -131,7 +131,7 @@ curl -s https://s3.local-aws.com
 | [docs/flows.md](docs/flows.md) | Flujos: arranque, generación de certificados, resolución DNS, petición HTTPS |
 | [docs/deployment.md](docs/deployment.md) | Despliegue: instalación paso a paso, selección de servicios, keystores Java |
 | [docs/operations.md](docs/operations.md) | Operaciones: gestión de certs, zonas DNS, logs, problemas conocidos |
-| [docs/integration.md](docs/integration.md) | Integración: patrón repos hermanos, Makefile de la app, local-env.json para el dashboard, clientes Spring Boot / Python |
+| [docs/integration.md](docs/integration.md) | Integración: patrón repos hermanos, Makefile de la app, visibilidad en el dashboard, clientes Spring Boot / Python |
 
 ## Integrar tu app
 
